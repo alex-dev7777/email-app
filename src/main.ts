@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Gmail/Yahoo One-Click unsubscribe support
+  app.use(urlencoded({ extended: false }));
 
   // Validation
   app.useGlobalPipes(new ValidationPipe({
@@ -22,13 +26,13 @@ async function bootstrap() {
     .setDescription('NestJS Email Service with Postfix SMTP')
     .setVersion('1.0')
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  
+
   console.log(`🚀 Email Service running on: http://localhost:${port}`);
   console.log(`📖 Swagger docs: http://localhost:${port}/api`);
 }

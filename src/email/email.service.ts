@@ -2,13 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { SendEmailDto, SendBulkEmailDto } from './dto/send-email.dto';
+import { TokenService } from '../unsubscribe/token.service';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private tokenService: TokenService,
+  ) {
     this.initializeTransporter();
   }
 
@@ -48,22 +52,41 @@ export class EmailService {
     const fromEmail = this.configService.get('FROM_EMAIL');
     const fromName = this.configService.get('FROM_NAME');
 
-    const mailOptions = {
-      from: dto.fromName 
-        ? `"${dto.fromName}" <${fromEmail}>` 
+    // Generate unsubscribe token
+    const tokenPayload = { email: dto.to, ts: Date.now() };
+    const token = this.tokenService.sign(tokenPayload);
+
+    const listUnsubMailto = `mailto:unsubscribe@tokenswallet.ru?subject=unsubscribe`;
+    const listUnsubHttp = `https://tokenswallet.ru/unsubscribe/one-click?t=${token}`;
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: dto.fromName
+        ? `"${dto.fromName}" <${fromEmail}>`
         : `"${fromName}" <${fromEmail}>`,
       to: dto.to,
       subject: dto.subject,
       html: dto.html,
       text: dto.text || this.stripHtml(dto.html),
+
+      // Critical for Gmail/Yahoo compliance
+      headers: {
+        'List-Unsubscribe': `<${listUnsubMailto}>, <${listUnsubHttp}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+
+      // Return-Path/VERP for bounce handling
+      envelope: {
+        from: `bounces+${token}@tokenswallet.ru`,
+        to: dto.to,
+      },
     };
 
     try {
       this.logger.log(`Sending email to: ${dto.to}`);
       const result = await this.transporter.sendMail(mailOptions);
-      
+
       this.logger.log(`Email sent successfully: ${result.messageId}`);
-      
+
       return {
         success: true,
         messageId: result.messageId,
@@ -79,16 +102,16 @@ export class EmailService {
 
   async sendBulkEmail(dto: SendBulkEmailDto) {
     const { to, subject, html, text, delay = 1000 } = dto;
-    
+
     this.logger.log(`Starting bulk email to ${to.length} recipients`);
-    
+
     const results = [];
     let successCount = 0;
     let failureCount = 0;
 
     for (let i = 0; i < to.length; i++) {
       const email = to[i];
-      
+
       try {
         const result = await this.sendEmail({
           to: email,
@@ -96,27 +119,27 @@ export class EmailService {
           html,
           text,
         });
-        
+
         results.push(result);
         successCount++;
-        
+
         this.logger.log(`Bulk ${i + 1}/${to.length}: ✅ ${email}`);
-        
+
         // Delay between emails
         if (i < to.length - 1 && delay > 0) {
           await this.sleep(delay);
         }
-        
+
       } catch (error) {
         const errorResult = {
           success: false,
           recipient: email,
           error: error.message,
         };
-        
+
         results.push(errorResult);
         failureCount++;
-        
+
         this.logger.error(`Bulk ${i + 1}/${to.length}: ❌ ${email} - ${error.message}`);
       }
     }
@@ -129,7 +152,7 @@ export class EmailService {
     };
 
     this.logger.log(`Bulk complete: ${successCount}✅ ${failureCount}❌`);
-    
+
     return summary;
   }
 
@@ -141,7 +164,7 @@ export class EmailService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #333;">🧪 Test Email</h1>
           <p>This test email was sent from NestJS application via Postfix SMTP.</p>
-          
+
           <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h3>📋 Test Details:</h3>
             <ul>
@@ -151,9 +174,9 @@ export class EmailService {
               <li><strong>Port:</strong> ${this.configService.get('SMTP_PORT')}</li>
             </ul>
           </div>
-          
+
           <p>✅ If you received this email, your Postfix configuration is working correctly!</p>
-          
+
           <hr style="margin: 20px 0;">
           <p style="color: #666; font-size: 12px;">
             Sent from NestJS Email Service
@@ -162,11 +185,11 @@ export class EmailService {
       `,
       text: `
         Test Email from NestJS + Postfix
-        
+
         This test email was sent at: ${new Date().toISOString()}
         Recipient: ${to}
         SMTP: ${this.configService.get('SMTP_HOST')}:${this.configService.get('SMTP_PORT')}
-        
+
         If you received this email, your Postfix configuration is working!
       `,
     };
@@ -176,7 +199,7 @@ export class EmailService {
 
   async getConnectionInfo() {
     const isConnected = await this.verifyConnection();
-    
+
     return {
       host: this.configService.get('SMTP_HOST'),
       port: this.configService.get('SMTP_PORT'),

@@ -1,0 +1,941 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  email/
+    dto/
+      send-email.dto.ts
+    email.controller.ts
+    email.module.ts
+    email.service.ts
+  app.module.ts
+  main.ts
+.env.example
+.gitignore
+ecosystem.config.js
+nest-cli.json
+package.json
+README.md
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/email/dto/send-email.dto.ts">
+import { IsEmail, IsString, IsNotEmpty, IsOptional, IsArray, ArrayMinSize, IsNumber } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class SendEmailDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  to: string;
+
+  @ApiProperty({ example: 'Test Email Subject' })
+  @IsString()
+  @IsNotEmpty()
+  subject: string;
+
+  @ApiProperty({ example: '<h1>Hello</h1><p>This is HTML content</p>' })
+  @IsString()
+  @IsNotEmpty()
+  html: string;
+
+  @ApiProperty({ example: 'Plain text content', required: false })
+  @IsString()
+  @IsOptional()
+  text?: string;
+
+  @ApiProperty({ example: 'Sender Name', required: false })
+  @IsString()
+  @IsOptional()
+  fromName?: string;
+}
+
+export class SendBulkEmailDto {
+  @ApiProperty({ 
+    example: ['user1@example.com', 'user2@example.com'],
+    type: [String]
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsEmail({}, { each: true })
+  to: string[];
+
+  @ApiProperty({ example: 'Bulk Email Subject' })
+  @IsString()
+  @IsNotEmpty()
+  subject: string;
+
+  @ApiProperty({ example: '<h1>Bulk Email</h1><p>Content for all recipients</p>' })
+  @IsString()
+  @IsNotEmpty()
+  html: string;
+
+  @ApiProperty({ example: 'Plain text content', required: false })
+  @IsString()
+  @IsOptional()
+  text?: string;
+
+  @ApiProperty({ example: 1000, description: 'Delay in ms between emails', required: false })
+  @IsNumber()
+  @IsOptional()
+  delay?: number;
+}
+
+export class TestEmailDto {
+  @ApiProperty({ example: 'test@example.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  to: string;
+}
+</file>
+
+<file path="src/email/email.controller.ts">
+import { Controller, Post, Get, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { EmailService } from './email.service';
+import { SendEmailDto, SendBulkEmailDto, TestEmailDto } from './dto/send-email.dto';
+
+@ApiTags('email')
+@Controller('email')
+export class EmailController {
+  constructor(private readonly emailService: EmailService) {}
+
+  @Get('status')
+  @ApiOperation({ summary: 'Check SMTP connection status' })
+  @ApiResponse({ status: 200, description: 'SMTP connection information' })
+  async getStatus() {
+    try {
+      const info = await this.emailService.getConnectionInfo();
+      return {
+        status: 'success',
+        data: info,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: 'error',
+          message: 'Failed to get SMTP status',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('send')
+  @ApiOperation({ summary: 'Send single email' })
+  @ApiResponse({ status: 200, description: 'Email sent successfully' })
+  async sendEmail(@Body() dto: SendEmailDto) {
+    try {
+      const result = await this.emailService.sendEmail(dto);
+      return {
+        status: 'success',
+        message: 'Email sent successfully',
+        data: result,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: 'error',
+          message: 'Failed to send email',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('send-bulk')
+  @ApiOperation({ summary: 'Send bulk emails' })
+  @ApiResponse({ status: 200, description: 'Bulk email process completed' })
+  async sendBulkEmail(@Body() dto: SendBulkEmailDto) {
+    try {
+      const result = await this.emailService.sendBulkEmail(dto);
+      return {
+        status: 'success',
+        message: 'Bulk email process completed',
+        data: result,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: 'error',
+          message: 'Failed to send bulk emails',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('test')
+  @ApiOperation({ summary: 'Send test email' })
+  @ApiResponse({ status: 200, description: 'Test email sent' })
+  async sendTestEmail(@Body() dto: TestEmailDto) {
+    try {
+      const result = await this.emailService.sendTestEmail(dto.to);
+      return {
+        status: 'success',
+        message: 'Test email sent successfully',
+        data: result,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: 'error',
+          message: 'Failed to send test email',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+}
+</file>
+
+<file path="src/email/email.module.ts">
+import { Module } from '@nestjs/common';
+import { EmailService } from './email.service';
+import { EmailController } from './email.controller';
+
+@Module({
+  controllers: [EmailController],
+  providers: [EmailService],
+  exports: [EmailService],
+})
+export class EmailModule {}
+</file>
+
+<file path="src/email/email.service.ts">
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import { SendEmailDto, SendBulkEmailDto } from './dto/send-email.dto';
+
+@Injectable()
+export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+  private transporter: nodemailer.Transporter;
+
+  constructor(private configService: ConfigService) {
+    this.initializeTransporter();
+  }
+
+  private initializeTransporter() {
+    const smtpConfig = {
+      host: this.configService.get('SMTP_HOST', 'localhost'),
+      port: parseInt(this.configService.get('SMTP_PORT', '25')),
+      secure: this.configService.get('SMTP_SECURE') === 'true',
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+    };
+
+    // Add auth only if credentials provided
+    const user = this.configService.get('SMTP_USER');
+    const pass = this.configService.get('SMTP_PASSWORD');
+    if (user && pass) {
+      (smtpConfig as any).auth = { user, pass };
+    }
+
+    this.transporter = nodemailer.createTransport(smtpConfig);
+    this.logger.log(`SMTP configured: ${smtpConfig.host}:${smtpConfig.port}`);
+  }
+
+  async verifyConnection(): Promise<boolean> {
+    try {
+      await this.transporter.verify();
+      this.logger.log('SMTP connection verified');
+      return true;
+    } catch (error) {
+      this.logger.error('SMTP verification failed:', error.message);
+      return false;
+    }
+  }
+
+  async sendEmail(dto: SendEmailDto) {
+    const fromEmail = this.configService.get('FROM_EMAIL');
+    const fromName = this.configService.get('FROM_NAME');
+
+    const mailOptions = {
+      from: dto.fromName 
+        ? `"${dto.fromName}" <${fromEmail}>` 
+        : `"${fromName}" <${fromEmail}>`,
+      to: dto.to,
+      subject: dto.subject,
+      html: dto.html,
+      text: dto.text || this.stripHtml(dto.html),
+    };
+
+    try {
+      this.logger.log(`Sending email to: ${dto.to}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      
+      this.logger.log(`Email sent successfully: ${result.messageId}`);
+      
+      return {
+        success: true,
+        messageId: result.messageId,
+        recipient: dto.to,
+        accepted: result.accepted,
+        rejected: result.rejected,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to send email to ${dto.to}:`, error.message);
+      throw new Error(`Email delivery failed: ${error.message}`);
+    }
+  }
+
+  async sendBulkEmail(dto: SendBulkEmailDto) {
+    const { to, subject, html, text, delay = 1000 } = dto;
+    
+    this.logger.log(`Starting bulk email to ${to.length} recipients`);
+    
+    const results = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let i = 0; i < to.length; i++) {
+      const email = to[i];
+      
+      try {
+        const result = await this.sendEmail({
+          to: email,
+          subject,
+          html,
+          text,
+        });
+        
+        results.push(result);
+        successCount++;
+        
+        this.logger.log(`Bulk ${i + 1}/${to.length}: ✅ ${email}`);
+        
+        // Delay between emails
+        if (i < to.length - 1 && delay > 0) {
+          await this.sleep(delay);
+        }
+        
+      } catch (error) {
+        const errorResult = {
+          success: false,
+          recipient: email,
+          error: error.message,
+        };
+        
+        results.push(errorResult);
+        failureCount++;
+        
+        this.logger.error(`Bulk ${i + 1}/${to.length}: ❌ ${email} - ${error.message}`);
+      }
+    }
+
+    const summary = {
+      total: to.length,
+      successful: successCount,
+      failed: failureCount,
+      results,
+    };
+
+    this.logger.log(`Bulk complete: ${successCount}✅ ${failureCount}❌`);
+    
+    return summary;
+  }
+
+  async sendTestEmail(to: string) {
+    const testContent = {
+      to,
+      subject: '🧪 Test Email from NestJS + Postfix',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #333;">🧪 Test Email</h1>
+          <p>This test email was sent from NestJS application via Postfix SMTP.</p>
+          
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3>📋 Test Details:</h3>
+            <ul>
+              <li><strong>Sent at:</strong> ${new Date().toISOString()}</li>
+              <li><strong>Recipient:</strong> ${to}</li>
+              <li><strong>SMTP Server:</strong> ${this.configService.get('SMTP_HOST')}</li>
+              <li><strong>Port:</strong> ${this.configService.get('SMTP_PORT')}</li>
+            </ul>
+          </div>
+          
+          <p>✅ If you received this email, your Postfix configuration is working correctly!</p>
+          
+          <hr style="margin: 20px 0;">
+          <p style="color: #666; font-size: 12px;">
+            Sent from NestJS Email Service
+          </p>
+        </div>
+      `,
+      text: `
+        Test Email from NestJS + Postfix
+        
+        This test email was sent at: ${new Date().toISOString()}
+        Recipient: ${to}
+        SMTP: ${this.configService.get('SMTP_HOST')}:${this.configService.get('SMTP_PORT')}
+        
+        If you received this email, your Postfix configuration is working!
+      `,
+    };
+
+    return await this.sendEmail(testContent);
+  }
+
+  async getConnectionInfo() {
+    const isConnected = await this.verifyConnection();
+    
+    return {
+      host: this.configService.get('SMTP_HOST'),
+      port: this.configService.get('SMTP_PORT'),
+      secure: this.configService.get('SMTP_SECURE') === 'true',
+      fromEmail: this.configService.get('FROM_EMAIL'),
+      fromName: this.configService.get('FROM_NAME'),
+      isConnected,
+      hasAuth: !!(this.configService.get('SMTP_USER') && this.configService.get('SMTP_PASSWORD')),
+    };
+  }
+
+  private stripHtml(html: string): string {
+    return html
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+</file>
+
+<file path="src/app.module.ts">
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { EmailModule } from './email/email.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    EmailModule,
+  ],
+})
+export class AppModule {}
+</file>
+
+<file path="src/main.ts">
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // Validation
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
+
+  // CORS
+  app.enableCors();
+
+  // Swagger
+  const config = new DocumentBuilder()
+    .setTitle('Email Service API')
+    .setDescription('NestJS Email Service with Postfix SMTP')
+    .setVersion('1.0')
+    .build();
+  
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  
+  console.log(`🚀 Email Service running on: http://localhost:${port}`);
+  console.log(`📖 Swagger docs: http://localhost:${port}/api`);
+}
+bootstrap();
+</file>
+
+<file path=".env.example">
+# SMTP Configuration for Postfix
+SMTP_HOST=localhost
+SMTP_PORT=25
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASSWORD=
+
+# Application
+PORT=3000
+NODE_ENV=production
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME=Email Service
+</file>
+
+<file path=".gitignore">
+node_modules
+node_modules
+memory-bank
+</file>
+
+<file path="ecosystem.config.js">
+module.exports = {
+  apps: [{
+    name: 'nestjs-email-app',
+    script: 'dist/main.js',
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '1G',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000
+    },
+    error_file: './logs/err.log',
+    out_file: './logs/out.log',
+    log_file: './logs/combined.log',
+    time: true
+  }]
+};
+</file>
+
+<file path="nest-cli.json">
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src"
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "nestjs-postfix-email",
+  "version": "1.0.0",
+  "description": "NestJS Email Service with Postfix",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/config": "^3.0.0",
+    "@nestjs/swagger": "^7.1.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.0",
+    "nodemailer": "^6.9.4",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@types/node": "^20.3.1",
+    "@types/nodemailer": "^6.4.9",
+    "typescript": "^5.1.3"
+  }
+}
+</file>
+
+<file path="README.md">
+# NestJS Email Service
+
+A robust, production-ready email service built with NestJS and Postfix SMTP. Provides REST API endpoints for sending single emails, bulk emails, and test emails with comprehensive logging and error handling.
+
+## 🚀 Features
+
+- **Single Email Sending** - Send individual emails with HTML/text content
+- **Bulk Email Operations** - Send emails to multiple recipients with configurable delays
+- **Test Email Functionality** - Send formatted test emails for configuration verification
+- **SMTP Connection Management** - Connection pooling and health verification
+- **API Documentation** - Auto-generated Swagger/OpenAPI documentation
+- **Request Validation** - Comprehensive input validation using class-validator
+- **Error Handling** - Structured error responses with detailed logging
+- **Environment Configuration** - Flexible SMTP configuration via environment variables
+
+## 📋 Prerequisites
+
+- Node.js 18+
+- Postfix SMTP server (configured and running)
+- npm or yarn package manager
+
+## 🛠️ Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd email-app
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` file with your SMTP configuration:
+   ```env
+   # SMTP Configuration
+   SMTP_HOST=localhost
+   SMTP_PORT=25
+   SMTP_SECURE=false
+   SMTP_USER=
+   SMTP_PASSWORD=
+
+   # Application
+   PORT=3000
+   NODE_ENV=production
+   FROM_EMAIL=noreply@yourdomain.com
+   FROM_NAME=Email Service
+   ```
+
+4. **Start the application**
+   ```bash
+   # Development mode
+   npm run start:dev
+
+   # Production mode
+   npm run build
+   npm run start:prod
+   ```
+
+## 📚 API Documentation
+
+Once the application is running, visit:
+- **Swagger UI**: `http://localhost:3000/api`
+- **API Base URL**: `http://localhost:3000`
+
+## 🔗 API Endpoints
+
+### Health Check
+```http
+GET /email/status
+```
+Returns SMTP connection status and configuration information.
+
+### Send Single Email
+```http
+POST /email/send
+Content-Type: application/json
+
+{
+  "to": "user@example.com",
+  "subject": "Test Email",
+  "html": "<h1>Hello</h1><p>This is a test email</p>",
+  "text": "Hello, this is a test email",
+  "fromName": "Custom Sender Name"
+}
+```
+
+### Send Bulk Emails
+```http
+POST /email/send-bulk
+Content-Type: application/json
+
+{
+  "to": ["user1@example.com", "user2@example.com"],
+  "subject": "Bulk Email",
+  "html": "<h1>Bulk Email</h1><p>Content for all recipients</p>",
+  "text": "Bulk email content",
+  "delay": 1000
+}
+```
+
+### Send Test Email
+```http
+POST /email/test
+Content-Type: application/json
+
+{
+  "to": "test@example.com"
+}
+```
+
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        A[HTTP Clients]
+    end
+
+    subgraph "Application Layer"
+        B[NestJS Application]
+        C[Email Controller]
+        D[Email Service]
+        E[Validation Pipes]
+        F[Exception Filters]
+    end
+
+    subgraph "Infrastructure Layer"
+        G[Nodemailer Transport]
+        H[Postfix SMTP]
+        I[Configuration Service]
+        J[Logger]
+    end
+
+    A --> B
+    B --> C
+    C --> D
+    C --> E
+    D --> G
+    G --> H
+    D --> I
+    D --> J
+    B --> F
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `SMTP_HOST` | SMTP server hostname | `localhost` | No |
+| `SMTP_PORT` | SMTP server port | `25` | No |
+| `SMTP_SECURE` | Use TLS/SSL | `false` | No |
+| `SMTP_USER` | SMTP username | - | No |
+| `SMTP_PASSWORD` | SMTP password | - | No |
+| `PORT` | Application port | `3000` | No |
+| `FROM_EMAIL` | Default sender email | - | Yes |
+| `FROM_NAME` | Default sender name | - | Yes |
+| `NODE_ENV` | Environment | `development` | No |
+
+### SMTP Connection Pooling
+
+The service uses connection pooling for optimal performance:
+- **Max Connections**: 5
+- **Max Messages per Connection**: 100
+- **Connection Reuse**: Enabled
+
+## 📝 Request/Response Examples
+
+### Successful Email Response
+```json
+{
+  "status": "success",
+  "message": "Email sent successfully",
+  "data": {
+    "success": true,
+    "messageId": "<message-id@domain.com>",
+    "recipient": "user@example.com",
+    "accepted": ["user@example.com"],
+    "rejected": []
+  }
+}
+```
+
+### Bulk Email Response
+```json
+{
+  "status": "success",
+  "message": "Bulk email process completed",
+  "data": {
+    "total": 2,
+    "successful": 2,
+    "failed": 0,
+    "results": [
+      {
+        "success": true,
+        "messageId": "<message-id-1@domain.com>",
+        "recipient": "user1@example.com"
+      },
+      {
+        "success": true,
+        "messageId": "<message-id-2@domain.com>",
+        "recipient": "user2@example.com"
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+```json
+{
+  "status": "error",
+  "message": "Failed to send email",
+  "error": "SMTP connection failed"
+}
+```
+
+## 🚦 Development
+
+### Available Scripts
+
+```bash
+# Start development server with hot reload
+npm run start:dev
+
+# Build the application
+npm run build
+
+# Start production server
+npm run start:prod
+
+# Start with NestJS CLI
+npm run start
+```
+
+### Project Structure
+
+```
+src/
+├── main.ts                    # Application bootstrap
+├── app.module.ts             # Root module
+└── email/
+    ├── email.module.ts       # Email module
+    ├── email.controller.ts   # REST endpoints
+    ├── email.service.ts      # Business logic
+    └── dto/
+        └── send-email.dto.ts # Data transfer objects
+```
+
+## 🔍 Monitoring & Logging
+
+The service provides comprehensive logging:
+- **Connection Status**: SMTP connection verification logs
+- **Email Delivery**: Success/failure logs with message IDs
+- **Bulk Operations**: Progress tracking for bulk sends
+- **Error Details**: Detailed error information for debugging
+
+Log levels and formats can be configured through NestJS Logger.
+
+## 🛡️ Security Considerations
+
+- **Input Validation**: All requests validated using class-validator
+- **Environment Variables**: Sensitive credentials stored in environment
+- **Error Handling**: Detailed errors logged but sanitized for API responses
+- **CORS**: Cross-origin requests enabled (configure as needed)
+
+## 🚀 Deployment
+
+### Docker Deployment (Optional)
+Create a `Dockerfile`:
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/main"]
+```
+
+### PM2 Deployment
+The project includes `ecosystem.config.js` for PM2 process management:
+```bash
+pm2 start ecosystem.config.js
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For support and questions:
+- Check the [API documentation](http://localhost:3000/api)
+- Review the logs for error details
+- Verify SMTP server configuration
+- Test with the `/email/test` endpoint
+
+## 🔄 Version History
+
+- **1.0.0** - Initial release with core email functionality
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+</file>
+
+</files>
